@@ -1,38 +1,149 @@
-export const initialStore=()=>{
-  return{
+export const initialStore = () => {
+  return {
     message: null,
-    todos: [
-      {
-        id: 1,
-        title: "Make the bed",
-        background: null,
-      },
-      {
-        id: 2,
-        title: "Do my homework",
-        background: null,
-      }
-    ]
+    messageError: "",
+    protectedMessage: '',
+    token: '',
+    todos: [] // Añadido porque se usa en add_task
+  };
+};
+
+export default function storeReducer(store, action = {}) {
+  switch (action.type) {
+    case "set_hello":
+      return {
+        ...store,
+        message: action.payload,
+      };
+
+    case "add_task":
+      const { id, color } = action.payload;
+      return {
+        ...store,
+        todos: store.todos.map((todo) =>
+          todo.id === id ? { ...todo, background: color } : todo
+        ),
+      };
+
+    case "set_error":
+      return {
+        ...store,
+        messageError: action.payload.error || "Ocurrió un error",
+      };
+      
+    case "succes_login":
+      return {
+        ...store,
+        token: action.payload.token,
+        messageError: "" // Limpiar errores al loguearse
+      };
+      
+    case "close_session":
+      return {
+        ...store,
+        token: "",
+        protectedMessage: ""
+      };
+      
+    case "protected_message":
+      return {
+        ...store,
+        protectedMessage: action.payload.message,
+        messageError: ""
+      };
+      
+    default:
+      throw Error("Unknown action.");
   }
 }
 
-export default function storeReducer(store, action = {}) {
-  switch(action.type){
-    case 'set_hello':
-      return {
-        ...store,
-        message: action.payload
-      };
-      
-    case 'add_task':
+export const signup = async (email, password, dispatch) => {
+  try {
+    const resp = await fetch(`${import.meta.env.VITE_BACKEND_URL}register/`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        email: email,
+        password: password,
+      }),
+    });
+    
+    const data = await resp.json();
 
-      const { id,  color } = action.payload
+    if (!resp.ok) {
+      dispatch({ type: "set_error", payload: { error: data.msg || "Error en el registro" } });
+      return false;
+    }
 
-      return {
-        ...store,
-        todos: store.todos.map((todo) => (todo.id === id ? { ...todo, background: color } : todo))
-      };
-    default:
-      throw Error('Unknown action.');
-  }    
-}
+    return true;
+  } catch (error) {
+    console.error("Ocurrió un error al registrar usuario", error);
+    dispatch({ type: "set_error", payload: { error: "Error de conexión" } });
+    return false;
+  }
+};
+
+export const login = async (email, password, dispatch) => {
+  try {
+    const resp = await fetch(`${import.meta.env.VITE_BACKEND_URL}login/`, {
+      method: "POST",
+      headers: {
+        "Content-type": "application/json",
+      },
+      body: JSON.stringify({
+        email: email,
+        password: password,
+      }),
+    });
+    
+    const data = await resp.json();
+
+    if (!resp.ok) {
+      dispatch({ 
+        type: "set_error", 
+        payload: { error: data.msg || "Credenciales incorrectas" } 
+      });
+      return false;
+    }
+    
+    dispatch({ type: "succes_login", payload: { token: data.token } });
+    return { token: data.token };
+    
+  } catch (error) {
+    console.error("Ocurrió un error al iniciar sesión", error);
+    dispatch({ type: "set_error", payload: { error: "Error de conexión" } });
+    return false;
+  }
+};
+
+export const protectedRoute = async (token, dispatch) => {
+  try {
+    const resp = await fetch(`${import.meta.env.VITE_BACKEND_URL}protected/`, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    
+    const data = await resp.json();
+    
+    if (!resp.ok) {
+      dispatch({
+        type: 'set_error', 
+        payload: {error: data.msg || 'No has iniciado sesión, serás redirigido'}
+      });
+      return false;
+    }
+    
+    dispatch({type: 'protected_message', payload: {message: data.msg}});
+    return true;
+    
+  } catch (error) {
+    console.error("Error en ruta protegida:", error);
+    dispatch({type: 'set_error', payload: {error: 'Error de conexión'}});
+    return false;
+  }
+};
